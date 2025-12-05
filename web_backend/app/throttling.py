@@ -1,7 +1,14 @@
 from rest_framework.throttling import BaseThrottle
 from django.utils import timezone
-from .models import RateLimit
 from ipaddress import ip_address
+
+# `RateLimit` model may be removed; import lazily to allow migrations that delete it.
+def _get_rate_limit_model():
+    try:
+        from .models import RateLimit
+        return RateLimit
+    except Exception:
+        return None
 
 
 class IPRateLimitThrottle(BaseThrottle):
@@ -15,13 +22,19 @@ class IPRateLimitThrottle(BaseThrottle):
         ip = self.get_ident(request)
         now = timezone.now()
 
+        # Try to use DB-backed RateLimit when available; otherwise skip throttling.
+        RateLimit = _get_rate_limit_model()
+        if RateLimit is None:
+            # No DB model available (likely being removed) — allow request.
+            return True
+
         # Simple policy: create or fetch a bucket.
         rl, created = RateLimit.objects.get_or_create(
             ip_address=ip,
             bucket_key=bucket,
             defaults={
-                "remaining": 10,
-                "limit_value": 10,
+                "remaining": 5,
+                "limit_value": 5,
                 "reset_at": now + timezone.timedelta(minutes=1),
             },
         )

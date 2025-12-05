@@ -10,7 +10,7 @@ from .serializers import (
 )
 from .models import Image, ExtractedText, AccessToken, User
 from .permissions import IsOwnerOrAdmin
-from .utils import compute_sha256_file, store_file_to_storage, call_ollama_ocr
+from .utils import compute_sha256_file, store_file_to_storage, call_ollama_ocr, get_client_ip_from_request, cache_incr_with_ttl
 from .throttling import IPRateLimitThrottle
 from rest_framework.parsers import MultiPartParser, FormParser
 
@@ -31,12 +31,27 @@ class UploadImageView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         user = request.user
 
-        # demo limit (5 images total for demo)
-        demo_limit = 5
-        count = Image.objects.filter(user=user).count()
-        if count >= demo_limit:
-            return Response({"detail": "Demo upload limit reached (5 images)."},
-                            status=status.HTTP_429_TOO_MANY_REQUESTS)
+        # Enforce per-IP upload limit without using the database.
+        # Allow up to 5 uploads per IP per WINDOW_SECONDS interval.
+        UPLOAD_LIMIT = 5
+        WINDOW_SECONDS = 60 * 60 * 24  # 1 day; change to 60 for per-minute
+
+        ip = get_client_ip_from_request(request) or "unknown"
+        cache_key = f"uploads:ip:{ip}"
+        count_for_ip = cache_incr_with_ttl(cache_key, WINDOW_SECONDS, delta=1, initial=1)
+        if count_for_ip > UPLOAD_LIMIT:
+            # Optionally provide Retry-After header: remaining TTL
+            from django.core.cache import cache
+            retry_after = None
+            try:
+                # Some cache backends support ttl()
+                retry_after = cache.ttl(cache_key)
+            except Exception:
+                retry_after = WINDOW_SECONDS
+
+            return Response({"detail": "Upload limit exceeded for your IP."},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS,
+                            headers={"Retry-After": str(retry_after)})
 
         file_obj = request.FILES.get("file")
         if not file_obj:
