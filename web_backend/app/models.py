@@ -12,6 +12,16 @@ class OCRStatus(models.TextChoices):
     FAILED = "failed"
     CACHED = "cached"
 
+# -------------------------
+# CUSTOM USER
+# -------------------------
+class User(AbstractUser):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.username} ({self.ip_address})"
+
 
 # -------------------------
 # IMAGES Table
