@@ -28,31 +28,12 @@ class UserAdmin(admin.ModelAdmin):
         return obj.images.count()
     image_count.short_description = 'Images'
 
-
 @admin.register(AccessToken)
 class AccessTokenAdmin(admin.ModelAdmin):
-    list_display = ('name', 'user', 'is_active', 'created_at', 'last_used_at', 'expires_at')
-    list_filter = ('revoked', 'created_at', 'expires_at')
-    search_fields = ('name', 'user__username')
-    readonly_fields = ('created_at', 'last_used_at')
-    ordering = ('-created_at',)
-    
-    fieldsets = (
-        ('Token Info', {
-            'fields': ('user', 'name')
-        }),
-        ('Status', {
-            'fields': ('revoked', 'last_used_at', 'expires_at')
-        }),
-        ('Metadata', {
-            'fields': ('scopes', 'ip_whitelist', 'metadata', 'created_at')
-        }),
-    )
-    
-    def is_active(self, obj):
-        return not obj.revoked and (not obj.expires_at or obj.expires_at > timezone.now())
-    is_active.boolean = True
-    is_active.short_description = 'Active'
+    list_display = ("name", "user", "created_at", "last_used_at", "expires_at", "revoked")
+    readonly_fields = ("created_at", "last_used_at")
+    search_fields = ("name", "user__email")
+
 
 
 @admin.register(Image)

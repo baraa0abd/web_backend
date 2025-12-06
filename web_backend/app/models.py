@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+import hashlib
 
 
 
@@ -101,13 +102,16 @@ class AccessToken(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE,
-        related_name="access_tokens", db_index=True
+        User,
+        on_delete=models.CASCADE,
+        related_name="access_tokens",
+        db_index=True,
     )
 
-    token = models.CharField(max_length=255, db_index=True)
-    name = models.CharField(max_length=255, null=True, blank=True)
+    # SECURE: We store only a SHA256 hash, never raw token
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
 
+    name = models.CharField(max_length=255, null=True, blank=True)
     scopes = models.JSONField(null=True, blank=True)
 
     last_used_at = models.DateTimeField(null=True, blank=True)
@@ -118,3 +122,24 @@ class AccessToken(models.Model):
 
     def __str__(self):
         return f"Token ({self.name}) for {self.user}"
+
+    # ---------- TOKEN UTILITIES ----------
+
+    def set_token(self, raw_token: str):
+        """Store SHA256 hash of the token."""
+        hashed = hashlib.sha256(raw_token.encode()).hexdigest()
+        self.token_hash = hashed
+
+    def check_token(self, raw_token: str) -> bool:
+        """Verify raw token matches hashed version."""
+        hashed = hashlib.sha256(raw_token.encode()).hexdigest()
+        return hashed == self.token_hash
+
+    def is_expired(self) -> bool:
+        """Check expiration."""
+        return self.expires_at and timezone.now() >= self.expires_at
+
+    def mark_used(self):
+        """Update last_used_at timestamp."""
+        self.last_used_at = timezone.now()
+        self.save(update_fields=["last_used_at"])
