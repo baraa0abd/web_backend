@@ -14,7 +14,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION"
 DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "wing-john-parallel-sharp.trycloudflare.com", 
+]
 
 # -------------------------------------------------------------------
 # APPLICATIONS
@@ -28,6 +32,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
 
     # third-party
     "rest_framework",
@@ -50,6 +55,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
 ]
 
 ROOT_URLCONF = "web_backend.urls"
@@ -140,7 +146,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }
-
+CORS_ALLOW_ALL_ORIGINS = True 
 # -------------------------------------------------------------------
 # TOKEN EXPIRATION
 # -------------------------------------------------------------------
