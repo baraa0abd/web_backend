@@ -1,38 +1,27 @@
 """
-Django settings for web_backend project.
-Clean, secure, DRF-ready settings file for Django 6.0.
+Optimized Django settings for web_backend
+Clean, production-style, fully DRF-ready.
 """
 
 from pathlib import Path
 from datetime import timedelta
-import os
-
-# ---------------------------------------------------------
-# PATHS
-# ---------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 # SECURITY
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 
-SECRET_KEY = "django-insecure-change-this-in-production"
-
-DEBUG = True  # set to False in production
-
+SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION"
+DEBUG = True
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
-
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 # APPLICATIONS
-# ---------------------------------------------------------
-
+# -------------------------------------------------------------------
 AUTH_USER_MODEL = "app.User"
 
 INSTALLED_APPS = [
-    # Django apps
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -40,16 +29,18 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Local app
-    "app",
-
-    # Third-party
+    # third-party
     "rest_framework",
+
+    # local apps
+    "app",
 ]
 
-# ---------------------------------------------------------
+AUTH_USER_MODEL = "app.User"
+
+# -------------------------------------------------------------------
 # MIDDLEWARE
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -61,24 +52,16 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
-# ---------------------------------------------------------
-# URLS / WSGI
-# ---------------------------------------------------------
-
 ROOT_URLCONF = "web_backend.urls"
 
-WSGI_APPLICATION = "web_backend.wsgi.application"
-
-
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 # TEMPLATES
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],  # optional
+        "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -90,10 +73,11 @@ TEMPLATES = [
     },
 ]
 
+WSGI_APPLICATION = "web_backend.wsgi.application"
 
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 # DATABASE
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
 
 DATABASES = {
     "default": {
@@ -102,10 +86,9 @@ DATABASES = {
     }
 }
 
-
-# ---------------------------------------------------------
-# REDIS CACHE
-# ---------------------------------------------------------
+# -------------------------------------------------------------------
+# CACHE CONFIG — Redis (Needed for throttling + rate limit counters)
+# -------------------------------------------------------------------
 
 CACHES = {
     "default": {
@@ -115,10 +98,37 @@ CACHES = {
     }
 }
 
+# -------------------------------------------------------------------
+# PASSWORD VALIDATION
+# -------------------------------------------------------------------
 
-# ---------------------------------------------------------
-# AUTH / DRF
-# ---------------------------------------------------------
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+# -------------------------------------------------------------------
+# INTERNATIONALIZATION
+# -------------------------------------------------------------------
+
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+# -------------------------------------------------------------------
+# STATIC & MEDIA FILES
+# -------------------------------------------------------------------
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "static"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# -------------------------------------------------------------------
+# REST FRAMEWORK — GLOBAL CONFIG
+# -------------------------------------------------------------------
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -127,48 +137,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 
+# -------------------------------------------------------------------
+# TOKEN EXPIRATION
+# -------------------------------------------------------------------
 
-# ---------------------------------------------------------
-# PASSWORD VALIDATION
-# ---------------------------------------------------------
-
-AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
-]
-
-
-# ---------------------------------------------------------
-# INTERNATIONALIZATION
-# ---------------------------------------------------------
-
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
-
-USE_I18N = True
-USE_TZ = True
-
-
-# ---------------------------------------------------------
-# STATIC + MEDIA FILES
-# ---------------------------------------------------------
-
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
-
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
-
-# ---------------------------------------------------------
-# DEFAULT PRIMARY KEY FIELD TYPE
-# ---------------------------------------------------------
-
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+ACCESS_TOKEN_EXPIRATION_HOURS = 24

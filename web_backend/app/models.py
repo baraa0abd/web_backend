@@ -99,6 +99,11 @@ class ExtractedText(models.Model):
 
 
 class AccessToken(models.Model):
+    """
+    Secure API token stored as SHA256 hash.
+    Never store raw token in DB.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     user = models.ForeignKey(
@@ -108,38 +113,35 @@ class AccessToken(models.Model):
         db_index=True,
     )
 
-    # SECURE: We store only a SHA256 hash, never raw token
+    # Secure hashed token
     token_hash = models.CharField(max_length=64, unique=True, db_index=True)
 
     name = models.CharField(max_length=255, null=True, blank=True)
     scopes = models.JSONField(null=True, blank=True)
 
+    created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
     revoked = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
-        return f"Token ({self.name}) for {self.user}"
+        return f"{self.name} ({self.user.username})"
 
-    # ---------- TOKEN UTILITIES ----------
+    # ---------------------------------------------------
+    # TOKEN HELPERS
+    # ---------------------------------------------------
 
     def set_token(self, raw_token: str):
-        """Store SHA256 hash of the token."""
-        hashed = hashlib.sha256(raw_token.encode()).hexdigest()
-        self.token_hash = hashed
+        """Hash and store token securely."""
+        self.token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
     def check_token(self, raw_token: str) -> bool:
-        """Verify raw token matches hashed version."""
-        hashed = hashlib.sha256(raw_token.encode()).hexdigest()
-        return hashed == self.token_hash
+        return hashlib.sha256(raw_token.encode()).hexdigest() == self.token_hash
 
-    def is_expired(self) -> bool:
-        """Check expiration."""
+    def is_expired(self):
         return self.expires_at and timezone.now() >= self.expires_at
 
     def mark_used(self):
-        """Update last_used_at timestamp."""
         self.last_used_at = timezone.now()
         self.save(update_fields=["last_used_at"])
