@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny
 from .models import AccessToken, Image, ExtractedText
 from .serializers import *
 from .utils.common import *
-from .utils.ollama_ocr import llava_extract_text
+from .utils.ollama_ocr import llava_extract_text, check_ollama
 
 # --------------------------------------------------------
 # OCR ONLY (no saving, just extract text from image)
@@ -80,8 +80,8 @@ class UploadImageView(APIView):
         # Rate limit (per IP — 5 uploads / day)
         ip = get_client_ip(request)
         key = f"upload:{ip}"
-        if cache_incr(key, 86400) > 5:
-            return Response({"detail": "Daily upload limit reached"}, status=429)
+        # if cache_incr(key, 86400) > 5:
+        #     return Response({"detail": "Daily upload limit reached"}, status=429)
 
         sha = compute_sha256(file)
         stored_path = save_file(file, file.name)
@@ -129,3 +129,14 @@ class DashboardView(APIView):
             "total_images": Image.objects.filter(user=request.user).count(),
             "total_texts": ExtractedText.objects.filter(user=request.user).count(),
         })
+
+
+class OllamaHealthView(APIView):
+    """Health-check endpoint to verify Ollama connectivity."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        status = check_ollama()
+        code = 200 if status.get("ok") else 502
+        return Response({"ok": status.get("ok"), "status_code": status.get("status_code"), "details": status.get("details")}, status=code)
