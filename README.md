@@ -1,46 +1,14 @@
-﻿# ITS_HACKTHON
+# OCR Upload Backend
 
-This repository is a small Django-based backend for image uploads and OCR extraction using an external LLaVA/Ollama model. The project was built to provide:
+A Django REST backend that accepts image uploads and extracts text from them using a self-hosted LLaVA model via Ollama. Built for the ITS Vision Hackathon (Computiq, Dec 2025).
 
-- a REST API for uploading images and extracting text
-- an integration with an Ollama LLaVA model for OCR-like extraction
-- deduplication and caching of results by SHA256
-- defensive handling of external model responses and a health endpoint
+## Quick start
 
-This README explains what the code contains, how it matches the requirements, how to run it locally, and pointers for testing and production hardening.
-
-## Project Structure
-
-- `web_backend/` — Django project folder (settings, wsgi/asgi, urls)
-- `app/` — main Django app with models, views, utils and migrations
-	- `models.py` — `User`, `Image`, `ExtractedText` models (custom user set via `AUTH_USER_MODEL`)
-	- `views.py` — API endpoints: upload, OCR-only, login, dashboard, Ollama health
-	- `utils/ollama_ocr.py` — Ollama client (defensive parsing, retries, `check_ollama()` helper)
-	- `utils/common.py` — helpers for hashing, saving files, getting client IP, cache helpers
-	- `urls.py` — app URL routes (OCR extract, Ollama health, etc.)
-	- `migrations/` — Django migrations for the app models
-
-## Key Features Implemented (matching requirements)
-
-- Upload endpoint with OCR: receives files, computes SHA256, stores file, calls LLaVA via an Ollama HTTP API, persists `Image` and `ExtractedText` records.
-- Deduplication: the flow computes the image SHA256 and avoids creating duplicate `Image` records; if an identical image is already processed, the API returns the cached extracted text or a 202 if it is still processing.
-- Rate limiting: a simple per-IP daily counter is used in the view; the per-day limit was increased from 5 to 25 uploads per IP/day per request.
-- Defensive Ollama integration: `app/utils/ollama_ocr.py` performs requests with timeouts and retries, parses multiple possible response shapes, and always returns a stable dict with `extracted_text`, `tokens_count`, `model_version`, and `raw_response`.
-- Health-check: `GET /api/ollama/health/` probes the configured Ollama host (env `OLLAMA_HOST`) and returns 200 when reachable and healthy or 502 when not.
-
-## Setup (local development)
-
-Prerequisites:
-
-- Python 3.10+ (use the venv included or create your own)
-- SQLite (default — included as `db.sqlite3` for local dev)
-- Ollama (or a compatible LLaVA server) listening on `http://localhost:11434` by default, or set `OLLAMA_HOST` to point to it.
-
-Install and run locally (PowerShell commands):
-
-```powershell
-cd C:\Users\begoy\Desktop\web_backend
-.\venv\Scripts\Activate.ps1
+```bash
+git clone https://github.com/baraa0abd/web_backend.git
+cd web_backend
+python -m venv venv
+venv\Scripts\activate        # Windows; use `source venv/bin/activate` on macOS/Linux
 pip install -r requirements.txt
 cd web_backend
 python manage.py migrate
@@ -48,75 +16,54 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-If Ollama runs on a different host/port, export the env var before starting the server:
+By default the app expects Ollama on `http://localhost:11434`. Point it elsewhere with:
 
-```powershell
-$env:OLLAMA_HOST = 'http://<ollama-host>:11434'
+```bash
+export OLLAMA_HOST=http://<ollama-host>:11434
 ```
 
-## Important API endpoints
+## What it does
 
-- `POST /api/ocr/extract/` — OCR-only endpoint. Form field: `image` (file). Returns `extracted_text`, `model_version`, and `tokens_count`.
-- `POST /api/images/upload/` — Upload + persist. Form field: `file` (file). Saves `Image` and `ExtractedText` and returns both objects.
-- `GET /api/ollama/health/` — Returns health/check status for the Ollama host used by the app.
-- `POST /api/auth/login/` — Basic login endpoint that creates an `AccessToken` for API usage.
+- **`POST /api/ocr/extract/`** — upload an image (`image` field), get back `extracted_text`, `model_version`, and `tokens_count`.
+- **`POST /api/images/upload/`** — upload + persist (`file` field); saves the image and its extracted text as records.
+- **`GET /api/ollama/health/`** — checks whether the configured Ollama host is reachable.
+- **`POST /api/auth/login/`** — basic login that issues an access token for API use.
 
-Serialized responses are provided by the serializers in `app/serializers.py`. The `Image` model stores raw `ollama_response` JSON for debugging and auditing.
+## Why it's built this way
 
-## How Ollama integration works (implementation details)
+- **Deduplication by SHA256** — identical images aren't reprocessed; a repeat upload returns the cached result (or `202` if the first one is still processing).
+- **Per-IP rate limiting** — 25 uploads/day/IP, enforced in the view.
+- **Defensive Ollama parsing** — `app/utils/ollama_ocr.py` handles timeouts, retries, and several possible response shapes from the model, and always returns a stable `{extracted_text, tokens_count, model_version, raw_response}` dict, even on failure. This was a deliberate choice after hitting `KeyError`s from unexpected Ollama response shapes during the hackathon.
+- **Cloudflare Tunnel** was used in the hackathon deployment to expose the local backend securely without opening ports directly.
 
-1. The upload or OCR endpoint saves the uploaded file locally (using Django's `default_storage`) and computes its SHA256 via `app/utils/common.py`.
-2. The server calls `llava_extract_text(storage_key, model_name='llava:latest')` in `app/utils/ollama_ocr.py`.
-	 - The client encodes the image as base64 and posts to the Ollama `/api/chat` endpoint.
-	 - The function uses a timeout and retry loop, and attempts to parse several common response shapes (for example: `message.content`, `output.content`, `choices[...]`).
-	 - The function always returns a consistent dictionary with `extracted_text`, `tokens_count`, `model_version`, and `raw_response` (even on errors).
-3. The view updates the `Image` record fields (`ocr_status`, `model_version`, `ollama_response`) and creates an `ExtractedText` row with the extracted content.
+## Project structure
 
-This defensive approach prevents server 500 errors when Ollama returns unexpected JSON or when the service is temporarily unavailable.
+```
+web_backend/
+├── web_backend/        # Django project (settings, urls, wsgi/asgi)
+└── app/
+    ├── models.py        # User, Image, ExtractedText
+    ├── views.py         # upload, OCR-only, login, dashboard, Ollama health
+    └── utils/
+        ├── ollama_ocr.py  # Ollama client: retries, defensive parsing
+        └── common.py      # hashing, file storage, client IP, cache helpers
+```
 
-## Testing & smoke checks
+## Testing
 
-Quick health check (from the machine running the app):
-
-```powershell
+```bash
 curl http://127.0.0.1:8000/api/ollama/health/
+curl -F "image=@sample.png" http://127.0.0.1:8000/api/ocr/extract/
 ```
 
-Quick OCR extract test with a sample PNG:
+There's no automated test suite yet — the next useful addition would be unit tests that mock `requests.post` in `ollama_ocr.py` against different response shapes (success, missing keys, non-JSON, error status).
 
-```powershell
-curl -F "image=@C:\path\to\sample.png" http://127.0.0.1:8000/api/ocr/extract/
-```
+## Known limitations
 
-There is also a small Python smoke test script in the repository (used by the developer) which posts an in-memory 1x1 PNG and checks the health and OCR endpoints.
+- Rate limiting is in-process (not Redis-backed), so it resets on restart and doesn't scale across multiple server instances.
+- OCR runs synchronously in the request; a real deployment should offload it to a background worker (Celery/RQ) and return `202` immediately.
+- No structured logging/metrics on Ollama call success or failure rates yet.
 
-Unit testing suggestion:
+## License
 
-- Mock `requests.post` in `app.utils.ollama_ocr` to return different shapes (successful, missing keys, non-JSON, error status). Test that `llava_extract_text` returns the expected consistent dict every time.
-
-## Observed runtime issues and mitigations
-
-- DisallowedHost errors when accessing the dev server via external proxy — add the host to `ALLOWED_HOSTS` in `web_backend/settings.py` for that environment or use `['*']` in development only.
-- Unique constraint errors on `app_image.sha256_hash` were addressed by checking for existing `Image` rows before creating a new one and returning cached results when available.
-- `KeyError` when parsing the Ollama response was fixed by adding defensive parsing and returning `raw_response` for debugging.
-
-## Production recommendations
-
-- Run Ollama on a stable host accessible by the backend and set `OLLAMA_HOST` in your production environment.
-- Move rate limiting and counters to a persistent store (Redis) and use Django/DRF throttling or a gateway-level rate limiter for reliability.
-- Offload OCR to a background worker (Celery/RQ) to avoid long request times; return 202 Accepted while processing.
-- Add structured logging (Sentry, ELK) and metrics for Ollama call success/failure rates and latency.
-
-## Next steps you might want me to do
-
-- Add structured logging for every Ollama call and failure case.
-- Add unit tests that mock Ollama responses and run them via `pytest`.
-- Convert synchronous OCR processing into an async/background task using Celery and Redis.
-
-If you want, I can (pick one): run the smoke tests against your running server and paste results, add unit tests and run them locally, or create a Celery-backed async OCR worker skeleton.
-
----
-
-Maintainer: local developer (see project files for contact/usage). Copy/paste this file as your repository README.
-
-
+No license file is currently included.
