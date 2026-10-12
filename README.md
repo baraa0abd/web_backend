@@ -49,6 +49,19 @@ web_backend/
         └── common.py      # hashing, file storage, client IP, cache helpers
 ```
 
+## How the Ollama integration works
+
+1. The upload/OCR endpoint saves the uploaded file via Django's `default_storage` and computes its SHA256 (`app/utils/common.py`).
+2. The view calls `llava_extract_text(storage_key, model_name='llava:latest')` in `app/utils/ollama_ocr.py`, which base64-encodes the image and posts it to Ollama's `/api/chat` endpoint, with a timeout and retry loop.
+3. The response is parsed defensively — it tries several known shapes (`message.content`, `output.content`, `choices[...]`) since Ollama's output format isn't perfectly consistent.
+4. The view updates the `Image` record (`ocr_status`, `model_version`, `ollama_response`) and creates an `ExtractedText` row.
+
+## Bugs hit and fixed during the hackathon
+
+- **`DisallowedHost` errors** when accessing the dev server through an external proxy (Cloudflare Tunnel) — fixed by adding the proxy host to `ALLOWED_HOSTS` in `web_backend/settings.py` for that environment.
+- **Unique constraint errors on `app_image.sha256_hash`** — fixed by checking for an existing `Image` row with that hash before creating a new one, returning the cached result instead.
+- **`KeyError` when parsing the Ollama response** — fixed by making the parser defensive (see above) and always returning `raw_response` for debugging instead of assuming a fixed shape.
+
 ## Testing
 
 ```bash
